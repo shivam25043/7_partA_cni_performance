@@ -1,0 +1,13 @@
+# AI Declaration: This boilerplate manifest was generated with AI assistance and must be reviewed by the team.
+apiVersion: v1
+kind: Service
+metadata:
+  name: http-echo-service
+  namespace: cni-bench
+spec:
+  selector:
+    app: http-echo-server
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5678

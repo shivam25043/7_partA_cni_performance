@@ -1,0 +1,13 @@
+NAME                                                READY   STATUS    RESTARTS   AGE   IP           NODE                        NOMINATED NODE   READINESS GATES
+coredns-7c65d6cfc9-lxtnm                            1/1     Running   0          15d   10.244.0.2   latency-lab-control-plane   <none>           <none>
+coredns-7c65d6cfc9-zc64p                            1/1     Running   0          15d   10.244.0.4   latency-lab-control-plane   <none>           <none>
+etcd-latency-lab-control-plane                      1/1     Running   0          15d   172.18.0.2   latency-lab-control-plane   <none>           <none>
+kindnet-8s5gc                                       1/1     Running   0          15d   172.18.0.4   latency-lab-worker          <none>           <none>
+kindnet-9hrcr                                       1/1     Running   0          15d   172.18.0.3   latency-lab-worker2         <none>           <none>
+kindnet-h9bkz                                       1/1     Running   0          15d   172.18.0.2   latency-lab-control-plane   <none>           <none>
+kube-apiserver-latency-lab-control-plane            1/1     Running   0          15d   172.18.0.2   latency-lab-control-plane   <none>           <none>
+kube-controller-manager-latency-lab-control-plane   1/1     Running   0          15d   172.18.0.2   latency-lab-control-plane   <none>           <none>
+kube-proxy-pl69x                                    1/1     Running   0          15d   172.18.0.4   latency-lab-worker          <none>           <none>
+kube-proxy-qnnp5                                    1/1     Running   0          15d   172.18.0.2   latency-lab-control-plane   <none>           <none>
+kube-proxy-zd4qh                                    1/1     Running   0          15d   172.18.0.3   latency-lab-worker2         <none>           <none>
+kube-scheduler-latency-lab-control-plane            1/1     Running   0          15d   172.18.0.2   latency-lab-control-plane   <none>           <none>

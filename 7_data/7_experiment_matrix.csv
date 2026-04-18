@@ -1,0 +1,7 @@
+scenario_id,cni,placement,requests,concurrency,duration_seconds,notes
+1,flannel,intra-node,1000,10,60,
+2,flannel,inter-node,1000,10,60,
+3,calico,intra-node,1000,10,60,
+4,calico,inter-node,1000,10,60,
+5,cilium,intra-node,1000,10,60,
+6,cilium,inter-node,1000,10,60,

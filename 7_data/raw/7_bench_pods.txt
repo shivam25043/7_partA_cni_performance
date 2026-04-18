@@ -1,0 +1,4 @@
+NAME                                READY   STATUS        RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+curl-client-59ccf4ccdd-vhj8f        1/1     Running       0          17s   10.244.1.191   latency-lab-worker2   <none>           <none>
+curl-client-6f76dc65f8-44ndv        1/1     Terminating   0          17s   10.244.1.190   latency-lab-worker2   <none>           <none>
+http-echo-server-74c75c7d78-2vhwl   1/1     Running       0          17s   10.244.2.16    latency-lab-worker    <none>           <none>

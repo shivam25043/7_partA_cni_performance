@@ -1,0 +1,20 @@
+# AI Declaration: This boilerplate manifest was generated with AI assistance and must be reviewed by the team.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: curl-client
+  namespace: cni-bench
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: curl-client
+  template:
+    metadata:
+      labels:
+        app: curl-client
+    spec:
+      containers:
+        - name: curl
+          image: curlimages/curl:8.6.0
+          command: ["sleep", "infinity"]

@@ -1,0 +1,258 @@
+---
+# === NAMESPACE ===
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cni-bench
+
+---
+# === SERVICE C: Mock Database (runs on worker-1) ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-c-code
+  namespace: cni-bench
+data:
+  app.py: |
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import json, time
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            data = json.dumps({"service": "C", "role": "mock-db", "data": {"user": "admin", "records": 42}})
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(data.encode())
+        def log_message(self, fmt, *args): pass
+
+    HTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-c
+  namespace: cni-bench
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-c
+  template:
+    metadata:
+      labels:
+        app: service-c
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: worker-1
+      containers:
+      - name: service-c
+        image: python:3.9-alpine
+        command: ["python", "/app/app.py"]
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: code
+          mountPath: /app
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      volumes:
+      - name: code
+        configMap:
+          name: service-c-code
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-c
+  namespace: cni-bench
+spec:
+  selector:
+    app: service-c
+  ports:
+  - port: 8080
+    targetPort: 8080
+
+---
+# === SERVICE B: API Layer (runs on worker-1) ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-b-code
+  namespace: cni-bench
+data:
+  app.py: |
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import json, urllib.request, time
+
+    SERVICE_C = "http://service-c.cni-bench.svc.cluster.local:8080"
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            t0 = time.time()
+            try:
+                with urllib.request.urlopen(SERVICE_C, timeout=5) as r:
+                    c_data = json.load(r)
+                hop_ms = round((time.time() - t0) * 1000, 3)
+                result = json.dumps({"service": "B", "role": "api", "hop_b_to_c_ms": hop_ms, "upstream": c_data})
+                self.send_response(200)
+            except Exception as e:
+                result = json.dumps({"service": "B", "error": str(e)})
+                self.send_response(503)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(result.encode())
+        def log_message(self, fmt, *args): pass
+
+    HTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-b
+  namespace: cni-bench
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-b
+  template:
+    metadata:
+      labels:
+        app: service-b
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: worker-1
+      containers:
+      - name: service-b
+        image: python:3.9-alpine
+        command: ["python", "/app/app.py"]
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: code
+          mountPath: /app
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      volumes:
+      - name: code
+        configMap:
+          name: service-b-code
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-b
+  namespace: cni-bench
+spec:
+  selector:
+    app: service-b
+  ports:
+  - port: 8080
+    targetPort: 8080
+
+---
+# === SERVICE A: Frontend (runs on worker-1, exposed via NodePort) ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-a-code
+  namespace: cni-bench
+data:
+  app.py: |
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import json, urllib.request, time
+
+    SERVICE_B = "http://service-b.cni-bench.svc.cluster.local:8080"
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            t0 = time.time()
+            try:
+                with urllib.request.urlopen(SERVICE_B, timeout=5) as r:
+                    b_data = json.load(r)
+                total_ms = round((time.time() - t0) * 1000, 3)
+                result = json.dumps({
+                    "service": "A",
+                    "role": "frontend",
+                    "total_a_to_b_ms": total_ms,
+                    "chain": b_data
+                })
+                self.send_response(200)
+            except Exception as e:
+                result = json.dumps({"service": "A", "error": str(e)})
+                self.send_response(503)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(result.encode())
+        def log_message(self, fmt, *args): pass
+
+    HTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-a
+  namespace: cni-bench
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-a
+  template:
+    metadata:
+      labels:
+        app: service-a
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: worker-1
+      containers:
+      - name: service-a
+        image: python:3.9-alpine
+        command: ["python", "/app/app.py"]
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: code
+          mountPath: /app
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      volumes:
+      - name: code
+        configMap:
+          name: service-a-code
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-a
+  namespace: cni-bench
+spec:
+  type: NodePort
+  selector:
+    app: service-a
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30080

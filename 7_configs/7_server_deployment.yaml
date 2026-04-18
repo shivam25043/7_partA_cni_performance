@@ -1,0 +1,22 @@
+# AI Declaration: This boilerplate manifest was generated with AI assistance and must be reviewed by the team.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-echo-server
+  namespace: cni-bench
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: http-echo-server
+  template:
+    metadata:
+      labels:
+        app: http-echo-server
+    spec:
+      containers:
+        - name: http-echo
+          image: hashicorp/http-echo:1.0.0
+          args: ["-text=hello-from-server"]
+          ports:
+            - containerPort: 5678

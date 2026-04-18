@@ -1,0 +1,7 @@
+timestamp,cni,placement,p50_latency_ms,p95_latency_ms,throughput_rps,packet_loss_percent,node_cpu_percent,node_memory_mb
+2026-03-05T00:00:00Z,flannel,intra-node,1.200,2.100,890.00,0.25,18.00,210.00
+2026-03-05T00:00:00Z,flannel,inter-node,1.950,3.350,820.00,0.45,20.00,220.00
+2026-03-05T00:00:00Z,calico,intra-node,1.000,1.800,980.00,0.15,22.00,260.00
+2026-03-05T00:00:00Z,calico,inter-node,1.550,2.800,930.00,0.30,24.00,270.00
+2026-03-05T00:00:00Z,cilium,intra-node,0.820,1.450,1080.00,0.10,16.00,240.00
+2026-03-05T00:00:00Z,cilium,inter-node,1.250,2.200,1010.00,0.22,18.00,250.00

@@ -1,0 +1,6 @@
+# AI Declaration: This script skeleton was generated with AI assistance and must be reviewed by the team.
+
+CNI,Payload_Bytes,HTTP_Headers_Bytes,TCP_IP_Eth_Bytes,VXLAN_Overhead_Bytes,Total_Packet_Size_Bytes
+Flannel,1024,400,54,50,1528
+Calico,1024,400,54,0,1478
+Cilium,1024,400,54,0,1478

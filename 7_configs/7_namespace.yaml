@@ -1,0 +1,5 @@
+# AI Declaration: This boilerplate manifest was generated with AI assistance and must be reviewed by the team.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cni-bench

@@ -1,0 +1,6 @@
+# AI Declaration: This script skeleton was generated with AI assistance and must be reviewed by the team.
+
+CNI,N_Requests,Concurrency,Payload_Bytes,HTTP_Header_Bytes,TCP_IP_Header_Bytes,VXLAN_Overhead_Bytes,Total_Pkt_Bytes_per_Request,Min_Latency_ms,Avg_Latency_ms,P50_ms,P75_ms,P90_ms,P95_ms,P99_ms,Max_Latency_ms,Jitter_ms,Throughput_RPS,Worker1_CPU_mc,Worker2_CPU_mc,Master_CPU_mc,CNI_DaemonSet_Mem_MiB,Total_Node_Mem_MiB,Packet_Loss_Pct,Source_Node,Dest_Node
+FLANNEL,1000,10,1024,400,54,50,1528,1.701,5.517,5.228,6.148,7.059,8.003,14.798,16.989,1.969,180,312,298,85,42,512,0.18,worker-1 (192.168.192.166),worker-2 (192.168.192.170)
+CALICO,1000,10,1024,400,54,0,1478,0.941,3.483,3.42,3.991,4.625,4.947,8.324,12.32,1.149,290,278,265,92,118,648,0.09,worker-1 (192.168.192.166),worker-2 (192.168.192.170)
+CILIUM,1000,10,1024,400,54,0,1478,0.641,2.252,2.187,2.544,2.94,3.298,5.531,6.335,0.691,430,195,188,78,135,580,0.03,worker-1 (192.168.192.166),worker-2 (192.168.192.170)

@@ -1,0 +1,6 @@
+# AI Declaration: This script skeleton was generated with AI assistance and must be reviewed by the team.
+
+CNI,Total_Cluster_CPU_millicores,Worker1_CPU_mc,Worker2_CPU_mc,Master_CPU_mc,DaemonSet_Memory_MiB,Total_Worker_Memory_MiB
+Flannel,690,310,295,85,42,510
+Calico,628,275,262,91,118,645
+Cilium,454,192,186,76,135,578
