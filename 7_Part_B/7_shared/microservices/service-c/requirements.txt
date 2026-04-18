@@ -1,0 +1,4 @@
+# AI Declaration: This script skeleton was generated with AI assistance and must be reviewed by the team.
+
+flask==3.0.0
+gunicorn==21.2.0
