@@ -1,0 +1,3 @@
+# AI Declaration: This script skeleton was generated with AI assistance and must be reviewed by the team.
+
+# metrics unavailable: kubectl top nodes failed (metrics-server may be missing)

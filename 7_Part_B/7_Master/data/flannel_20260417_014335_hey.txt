@@ -1,0 +1,46 @@
+# AI Declaration: This script skeleton was generated with AI assistance and must be reviewed by the team.
+
+
+Summary:
+  Total:	3.9968 secs
+  Slowest:	3.3118 secs
+  Fastest:	0.0070 secs
+  Average:	0.0567 secs
+  Requests/sec:	125.1011
+  
+
+Response time histogram:
+  0.007 [1]	|
+  0.337 [495]	|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.668 [0]	|
+  0.998 [0]	|
+  1.329 [1]	|
+  1.659 [0]	|
+  1.990 [1]	|
+  2.320 [0]	|
+  2.651 [0]	|
+  2.981 [0]	|
+  3.312 [2]	|
+
+
+Latency distribution:
+  10% in 0.0130 secs
+  25% in 0.0149 secs
+  50% in 0.0477 secs
+  75% in 0.0503 secs
+  90% in 0.0519 secs
+  95% in 0.0530 secs
+  99% in 0.0576 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:	0.0026 secs, 0.0070 secs, 3.3118 secs
+  DNS-lookup:	0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:	0.0000 secs, 0.0000 secs, 0.0003 secs
+  resp wait:	0.0540 secs, 0.0064 secs, 3.3110 secs
+  resp read:	0.0000 secs, 0.0000 secs, 0.0003 secs
+
+Status code distribution:
+  [200]	500 responses
+
+
+

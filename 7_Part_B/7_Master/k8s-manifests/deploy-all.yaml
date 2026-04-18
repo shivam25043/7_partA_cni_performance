@@ -1,0 +1,878 @@
+# AI Declaration: This script skeleton was generated with AI assistance and must be reviewed by the team.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cni-benchmark
+---
+apiVersion: v1
+data:
+  app.py: "import os, time, json, urllib.parse, math\nfrom http.server import HTTPServer,\
+    \ BaseHTTPRequestHandler, ThreadingHTTPServer\n\nDATABASE = []\nPERSISTENT_FILE\
+    \ = \"/var/lib/cni-ledger/leaderboard.json\"\nFILE_INDEX = \"/var/lib/cni-ledger/files.json\"\
+    \nUPLOAD_DIR = \"/var/lib/cni-ledger/uploads\"\n\nos.makedirs(UPLOAD_DIR, exist_ok=True)\n\
+    \ndef load_leaderboard():\n  if os.path.exists(PERSISTENT_FILE):\n    try:\n \
+    \     with open(PERSISTENT_FILE, \"r\") as f:\n        return json.load(f)\n \
+    \   except:\n      pass\n  return {\"Flannel\": {}, \"Calico\": {}, \"Cilium\"\
+    : {}}\n\ndef save_leaderboard(board):\n  try:\n    with open(PERSISTENT_FILE,\
+    \ \"w\") as f:\n      json.dump(board, f)\n  except:\n    pass\n\ndef load_files():\n\
+    \  if os.path.exists(FILE_INDEX):\n    try:\n      with open(FILE_INDEX, \"r\"\
+    ) as f:\n        return json.load(f)\n    except:\n      pass\n  return []\n\n\
+    def save_files(files):\n  try:\n    with open(FILE_INDEX, \"w\") as f:\n     \
+    \ json.dump(files, f)\n  except:\n    pass\n\nFILES = load_files()\n\ndef next_message_id():\n\
+    \  highest = 0\n  for row in DATABASE:\n    try:\n      highest = max(highest,\
+    \ int(row.get(\"id\", 0) or 0))\n    except:\n      pass\n  return highest + 1\n\
+    \ndef get_cpu_load():\n  try:\n    return round(os.getloadavg()[0], 2)\n  except:\n\
+    \    return 0.0\n\ndef percentile(values, pct):\n  if not values:\n    return\
+    \ 0.0\n  arr = sorted(values)\n  if len(arr) == 1:\n    return round(arr[0], 2)\n\
+    \  idx = (len(arr) - 1) * pct\n  lo = int(math.floor(idx))\n  hi = int(math.ceil(idx))\n\
+    \  if lo == hi:\n    return round(arr[lo], 2)\n  return round(arr[lo] + (arr[hi]\
+    \ - arr[lo]) * (idx - lo), 2)\n\ndef stddev(values):\n  if not values:\n    return\
+    \ 0.0\n  mean = sum(values) / len(values)\n  var = sum((v - mean) ** 2 for v in\
+    \ values) / len(values)\n  return round(math.sqrt(var), 2)\n\ndef safe_name(name):\n\
+    \  cleaned = os.path.basename(name or \"upload.bin\").strip()\n  return cleaned\
+    \ if cleaned else \"upload.bin\"\n\ndef human_size(size_bytes):\n  size = float(size_bytes\
+    \ or 0)\n  units = [\"B\", \"KB\", \"MB\", \"GB\"]\n  idx = 0\n  while size >=\
+    \ 1024 and idx < len(units) - 1:\n    size /= 1024.0\n    idx += 1\n  return f\"\
+    {size:.1f} {units[idx]}\"\n\ndef kind_from_type(content_type):\n  ctype = (content_type\
+    \ or \"\").lower()\n  if ctype.startswith(\"image/\"):\n    return \"image\"\n\
+    \  if ctype.startswith(\"video/\"):\n    return \"video\"\n  return \"file\"\n\
+    \ndef auto_load_stats(records, now_ts):\n  recent_auto = [m for m in records if\
+    \ now_ts - m.get(\"timestamp\", 0) <= 30 and str(m.get(\"text\", \"\")).startswith(\"\
+    [AUTO|\")]\n  if not recent_auto:\n    return {\n      \"events_30s\": 0,\n  \
+    \    \"rps_30s\": 0.0,\n      \"mode\": \"idle\",\n      \"session\": \"--\"\n\
+    \    }\n\n  mode_count = {}\n  session_count = {}\n  for row in recent_auto:\n\
+    \    text = str(row.get(\"text\", \"\"))\n    parts = text.split(\"|\")\n    if\
+    \ len(parts) >= 4:\n      mode = parts[1]\n      sess = parts[2]\n      mode_count[mode]\
+    \ = mode_count.get(mode, 0) + 1\n      session_count[sess] = session_count.get(sess,\
+    \ 0) + 1\n\n  dominant_mode = max(mode_count.items(), key=lambda x: x[1])[0] if\
+    \ mode_count else \"mixed\"\n  dominant_session = max(session_count.items(), key=lambda\
+    \ x: x[1])[0] if session_count else \"--\"\n  return {\n    \"events_30s\": len(recent_auto),\n\
+    \    \"rps_30s\": round(len(recent_auto) / 30.0, 2),\n    \"mode\": dominant_mode,\n\
+    \    \"session\": dominant_session\n  }\n\ndef delete_file_record(file_id):\n\
+    \  target = next((f for f in FILES if int(f.get(\"id\", 0)) == int(file_id)),\
+    \ None)\n  if not target:\n    return False\n  try:\n    file_path = target.get(\"\
+    path\", \"\")\n    if file_path and os.path.exists(file_path):\n      os.remove(file_path)\n\
+    \  except:\n    pass\n  FILES[:] = [f for f in FILES if int(f.get(\"id\", 0))\
+    \ != int(file_id)]\n  DATABASE[:] = [m for m in DATABASE if int(m.get(\"file_id\"\
+    , -1) or -1) != int(file_id)]\n  save_files(FILES)\n  return True\n\ndef delete_message_record(message_id):\n\
+    \  target = next((m for m in DATABASE if int(m.get(\"id\", 0)) == int(message_id)),\
+    \ None)\n  if not target:\n    return False\n  if target.get(\"type\") == \"file\"\
+    \ and target.get(\"file_id\") is not None:\n    return delete_file_record(int(target.get(\"\
+    file_id\")))\n  DATABASE[:] = [m for m in DATABASE if int(m.get(\"id\", 0)) !=\
+    \ int(message_id)]\n  return True\n\ndef clear_all_data():\n  for row in list(FILES):\n\
+    \    try:\n      file_path = row.get(\"path\", \"\")\n      if file_path and os.path.exists(file_path):\n\
+    \        os.remove(file_path)\n    except:\n      pass\n  FILES.clear()\n  DATABASE.clear()\n\
+    \  save_files(FILES)\n  save_leaderboard({\"Flannel\": {}, \"Calico\": {}, \"\
+    Cilium\": {}})\n\ndef health_grade(p95, jitter, data_rate):\n  if p95 <= 15 and\
+    \ jitter <= 5 and data_rate >= 0.2:\n    return \"Excellent\"\n  if p95 <= 30\
+    \ and jitter <= 10:\n    return \"Good\"\n  if p95 <= 60 and jitter <= 20:\n \
+    \   return \"Fair\"\n  return \"Needs Tuning\"\n\ndef update_metrics_and_board():\n\
+    \  now = time.time()\n  active_cni = os.environ.get(\"ACTIVE_CNI\", \"Flannel\"\
+    )\n  recent_records = [m for m in DATABASE if now - m[\"timestamp\"] <= 5.0]\n\
+    \  throughput = round(len(recent_records) / 5.0, 2) if DATABASE else 0.0\n  latencies\
+    \ = [float(m.get(\"cni_latency_ms\", 0) or 0) for m in DATABASE]\n  avg_latency\
+    \ = round(sum(latencies) / len(latencies), 2) if latencies else 0.0\n  p95 = percentile(latencies,\
+    \ 0.95)\n  p99 = percentile(latencies, 0.99)\n  jitter = stddev(latencies)\n \
+    \ bytes_recent = sum(int(m.get(\"payload_bytes\", 0) or 0) for m in recent_records)\n\
+    \  data_rate_mbps = round((bytes_recent / 5.0) / (1024 * 1024), 3)\n  cpu = get_cpu_load()\n\
+    \  grade = health_grade(p95, jitter, data_rate_mbps)\n  auto_stats = auto_load_stats(DATABASE,\
+    \ now)\n\n  board = load_leaderboard()\n  if active_cni not in board:\n    board[active_cni]\
+    \ = {}\n  record = board.get(active_cni, {})\n  record[\"max_throughput\"] = max(record.get(\"\
+    max_throughput\", 0.0), throughput)\n  record[\"avg_latency\"] = avg_latency if\
+    \ avg_latency > 0 else record.get(\"avg_latency\", 0.0)\n  record[\"max_cpu\"\
+    ] = max(record.get(\"max_cpu\", 0.0), cpu)\n  record[\"best_p95\"] = p95 if record.get(\"\
+    best_p95\") is None else min(record.get(\"best_p95\", p95), p95)\n  board[active_cni]\
+    \ = record\n  save_leaderboard(board)\n\n  metrics = {\n    \"active_cni\": active_cni,\n\
+    \    \"cpu_load_1m\": cpu,\n    \"avg_latency_ms\": avg_latency,\n    \"p95_latency_ms\"\
+    : p95,\n    \"p99_latency_ms\": p99,\n    \"jitter_ms\": jitter,\n    \"throughput_rps\"\
+    : throughput,\n    \"data_rate_mbps\": data_rate_mbps,\n    \"health_grade\":\
+    \ grade,\n    \"auto_events_30s\": auto_stats[\"events_30s\"],\n    \"auto_rps_30s\"\
+    : auto_stats[\"rps_30s\"],\n    \"auto_mode\": auto_stats[\"mode\"],\n    \"auto_session\"\
+    : auto_stats[\"session\"],\n    \"total_records\": len(DATABASE),\n    \"total_files\"\
+    : len(FILES)\n  }\n  return board, metrics\n\nHTML_DASHBOARD = \"\"\"\n<!DOCTYPE\
+    \ html>\n<html>\n<head>\n  <title>Worker-2 Performance Backend</title>\n  <style>\n\
+    \    :root {\n      --bg: #0f111a;\n      --panel: #161b25;\n      --panel-2:\
+    \ #1e2532;\n      --text: #e7ecf3;\n      --muted: #9aa7b8;\n      --line: #2c3648;\n\
+    \      --accent: #7aa2f7;\n      --good: #8bd5a1;\n    }\n    * { box-sizing:\
+    \ border-box; }\n    body { margin: 0; background: linear-gradient(140deg, #0f111a,\
+    \ #121826); color: var(--text); font-family: 'Inter', 'Segoe UI', sans-serif;\
+    \ }\n    .container { max-width: 1420px; margin: 0 auto; padding: 22px; }\n  \
+    \  .hero { background: var(--panel); border: 1px solid var(--line); border-radius:\
+    \ 16px; padding: 20px; margin-bottom: 14px; }\n    .title { font-size: 26px; margin:\
+    \ 0 0 6px; color: #f5e0dc; }\n    .subtitle { margin: 0; color: var(--muted);\
+    \ }\n    .status { margin-top: 12px; display: inline-block; background: #1d2736;\
+    \ border: 1px solid #34435e; color: #c6d7ff; padding: 6px 10px; border-radius:\
+    \ 999px; font-size: 12px; font-weight: 600; }\n    .kpi-grid { display: grid;\
+    \ grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 10px; margin-bottom:\
+    \ 14px; }\n    .kpi { background: var(--panel); border: 1px solid var(--line);\
+    \ border-radius: 12px; padding: 12px; }\n    .kpi .k { font-size: 12px; color:\
+    \ var(--muted); margin-bottom: 7px; }\n    .kpi .v { font-size: 21px; font-weight:\
+    \ 700; color: #f2f6ff; }\n    .layout { display: grid; grid-template-columns:\
+    \ 1.35fr 1fr; gap: 12px; }\n    .panel { background: var(--panel); border: 1px\
+    \ solid var(--line); border-radius: 14px; padding: 14px; }\n    .panel h3 { margin:\
+    \ 0 0 10px; font-size: 15px; color: #d4def0; }\n    .leaderboard { display: grid;\
+    \ grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 10px; margin-bottom:\
+    \ 12px; }\n    .lb-card { background: var(--panel-2); border: 1px solid var(--line);\
+    \ border-radius: 12px; padding: 11px; }\n    .lb-name { font-weight: 700; margin-bottom:\
+    \ 7px; }\n    .lb-row { display: flex; justify-content: space-between; font-size:\
+    \ 12px; margin-bottom: 5px; color: var(--muted); }\n    .lb-row b { color: #e6edf9;\
+    \ }\n    .grade { padding: 4px 8px; border-radius: 999px; border: 1px solid #2f3e56;\
+    \ background: #1a2636; color: #cde0ff; font-size: 12px; font-weight: 700; }\n\
+    \    table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout:\
+    \ fixed; }\n    th, td { border-bottom: 1px solid var(--line); padding: 9px; text-align:\
+    \ left; vertical-align: top; overflow-wrap: anywhere; word-break: break-word;\
+    \ }\n    th { color: #c8d5e7; font-weight: 600; }\n    .tag { display: inline-block;\
+    \ padding: 3px 7px; border-radius: 8px; background: #1f2b3d; border: 1px solid\
+    \ #344766; font-size: 11px; }\n    .media-grid { display: grid; grid-template-columns:\
+    \ repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }\n    .media-item { background:\
+    \ #121927; border: 1px solid var(--line); border-radius: 10px; padding: 8px; }\n\
+    \    .media-item img, .media-item video { width: 100%; max-height: 140px; object-fit:\
+    \ cover; border-radius: 8px; background: #0e131d; }\n    .media-meta { color:\
+    \ var(--muted); font-size: 12px; margin-top: 6px; line-height: 1.4; }\n    .media-actions\
+    \ a { color: var(--accent); text-decoration: none; margin-right: 10px; font-size:\
+    \ 12px; }\n    .hint { color: #8fa0b9; font-size: 12px; margin-top: 8px; }\n \
+    \   .truncate { display: inline-block; max-width: 430px; white-space: nowrap;\
+    \ overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }\n    .auto-strip\
+    \ { margin-top: 10px; display: grid; grid-template-columns: repeat(4, minmax(120px,\
+    \ 1fr)); gap: 8px; }\n    .mini { background: #131a28; border: 1px solid var(--line);\
+    \ border-radius: 10px; padding: 8px; }\n    .mini .k { color: var(--muted); font-size:\
+    \ 11px; }\n    .mini .v { color: #e8efff; font-size: 15px; font-weight: 700; margin-top:\
+    \ 3px; }\n    .toolbar { display:flex; gap:8px; align-items:center; justify-content:flex-end;\
+    \ margin-top:10px; }\n    .btn-danger { border:1px solid #5a2d3c; background:#2c1820;\
+    \ color:#ffcad8; border-radius:8px; padding:6px 10px; font-size:12px; cursor:pointer;\
+    \ }\n    .btn-danger:hover { background:#3a1d28; }\n    .btn-mini { border:1px\
+    \ solid #334a6e; background:#1b2638; color:#d8e8ff; border-radius:7px; padding:4px\
+    \ 8px; font-size:11px; cursor:pointer; }\n    .btn-mini-danger { border-color:#644050;\
+    \ background:#31202a; color:#ffd2de; }\n  </style>\n  <script>\n    function esc(t)\
+    \ {\n      return (t || '').replace(/[&<>\\\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\\\
+    \"':'&quot;',\"'\":'&#39;'}[c]));\n    }\n\n    function fetchData() {\n     \
+    \ fetch('/data').then(r => r.json()).then(data => {\n        const m = data.metrics\
+    \ || {};\n        document.getElementById('active-cni').innerText = m.active_cni\
+    \ || '--';\n        document.getElementById('cpu-load').innerText = (m.cpu_load_1m\
+    \ || 0) + ' load';\n        document.getElementById('avg-lat').innerText = (m.avg_latency_ms\
+    \ || 0) + ' ms';\n        document.getElementById('p95-lat').innerText = (m.p95_latency_ms\
+    \ || 0) + ' ms';\n        document.getElementById('p99-lat').innerText = (m.p99_latency_ms\
+    \ || 0) + ' ms';\n        document.getElementById('jitter').innerText = (m.jitter_ms\
+    \ || 0) + ' ms';\n        document.getElementById('throughput').innerText = (m.throughput_rps\
+    \ || 0) + ' req/s';\n        document.getElementById('data-rate').innerText =\
+    \ (m.data_rate_mbps || 0) + ' MB/s';\n        document.getElementById('records').innerText\
+    \ = m.total_records || 0;\n        document.getElementById('files-total').innerText\
+    \ = m.total_files || 0;\n        document.getElementById('health-grade').innerText\
+    \ = m.health_grade || '--';\n        document.getElementById('auto-events').innerText\
+    \ = m.auto_events_30s || 0;\n        document.getElementById('auto-rps').innerText\
+    \ = (m.auto_rps_30s || 0) + ' req/s';\n        document.getElementById('auto-mode').innerText\
+    \ = m.auto_mode || '--';\n        document.getElementById('auto-session').innerText\
+    \ = m.auto_session || '--';\n\n        ['Flannel', 'Calico', 'Cilium'].forEach(cni\
+    \ => {\n          const row = (data.leaderboard || {})[cni] || {};\n         \
+    \ document.getElementById(cni + '-lat').innerText = (row.avg_latency || 0) + '\
+    \ ms';\n          document.getElementById(cni + '-tps').innerText = (row.max_throughput\
+    \ || 0) + ' req/s';\n          document.getElementById(cni + '-cpu').innerText\
+    \ = (row.max_cpu || 0) + ' load';\n          document.getElementById(cni + '-p95').innerText\
+    \ = (row.best_p95 || 0) + ' ms';\n        });\n\n        const tbody = document.getElementById('tbody');\n\
+    \        tbody.innerHTML = '';\n        (data.messages || []).slice(0, 100).forEach(msg\
+    \ => {\n          if ((msg.text || '').startsWith('[AUTO|')) return;\n       \
+    \   const payload = msg.type === 'file'\n            ? `<a class=\"truncate\"\
+    \ href=\"/files/${msg.file_id}\" target=\"_blank\" title=\"${esc(msg.text)}\"\
+    >${esc(msg.text)}</a> <span style=\"color:#7f8ea5\">(${msg.file_size_human ||\
+    \ ''})</span>`\n            : `<span class=\"truncate\" title=\"${esc(msg.text)}\"\
+    >${esc(msg.text)}</span>`;\n          const action = msg.type === 'file'\n   \
+    \         ? `<button class=\"btn-mini btn-mini-danger\" onclick=\"deleteFile(${msg.file_id})\"\
+    >Delete</button>`\n            : `<button class=\"btn-mini btn-mini-danger\" onclick=\"\
+    deleteMessage(${msg.id})\">Delete</button>`;\n          tbody.innerHTML += `<tr>\n\
+    \            <td>${new Date(msg.timestamp * 1000).toLocaleTimeString()}</td>\n\
+    \            <td><span class=\"tag\">${esc(msg.sender)}</span></td>\n        \
+    \    <td>${payload}</td>\n            <td>${esc(msg.active_cni || '--')}</td>\n\
+    \            <td><span class=\"tag\">${msg.cni_latency_ms || 0} ms</span></td>\n\
+    \            <td>${action}</td>\n          </tr>`;\n        });\n\n        const\
+    \ grid = document.getElementById('files');\n        grid.innerHTML = '';\n   \
+    \     (data.files || []).slice(0, 8).forEach(f => {\n          const media = f.kind\
+    \ === 'image'\n            ? `<img src=\"/media/${f.id}\" alt=\"${esc(f.original_name)}\"\
+    >`\n            : (f.kind === 'video'\n              ? `<div class=\"hint\">Video\
+    \ file (${esc(f.size_human || '')})</div>`\n              : `<div class=\"hint\"\
+    >No preview available</div>`);\n\n          grid.innerHTML += `<div class=\"media-item\"\
+    >\n            ${media}\n            <div class=\"media-meta\"><b>${esc(f.original_name)}</b><br>${esc(f.sender)}\
+    \ | ${f.size_human || ''}</div>\n            <div class=\"media-actions\"><a href=\"\
+    /media/${f.id}\" target=\"_blank\">Open</a><a href=\"/files/${f.id}\" target=\"\
+    _blank\">Download</a><button class=\"btn-mini btn-mini-danger\" onclick=\"deleteFile(${f.id})\"\
+    >Delete</button></div>\n          </div>`;\n        });\n      }).catch(() =>\
+    \ {});\n    }\n\n    function deleteMessage(messageId) {\n      if (!confirm('Delete\
+    \ this message from backend ledger?')) return;\n      fetch('/admin/delete', {\n\
+    \        method: 'POST',\n        headers: {'Content-Type': 'application/json'},\n\
+    \        body: JSON.stringify({message_id: messageId})\n      }).then(() => fetchData()).catch(()\
+    \ => {});\n    }\n\n    function deleteFile(fileId) {\n      if (!confirm('Delete\
+    \ this file and related ledger entry?')) return;\n      fetch('/admin/delete',\
+    \ {\n        method: 'POST',\n        headers: {'Content-Type': 'application/json'},\n\
+    \        body: JSON.stringify({file_id: fileId})\n      }).then(() => fetchData()).catch(()\
+    \ => {});\n    }\n\n    function clearAllData() {\n      if (!confirm('Clear all\
+    \ messages, files, and leaderboard data?')) return;\n      fetch('/admin/clear',\
+    \ { method: 'POST' }).then(() => fetchData()).catch(() => {});\n    }\n\n    setInterval(fetchData,\
+    \ 3000);\n    window.onload = fetchData;\n  </script>\n</head>\n<body>\n  <div\
+    \ class=\"container\">\n    <div class=\"hero\">\n      <h1 class=\"title\">Worker-2\
+    \ CNI Performance Backend</h1>\n      <p class=\"subtitle\">Persistent storage\
+    \ and observability plane for Service A -> Service B -> Service C</p>\n      <span\
+    \ class=\"status\">Live analytics refresh: 1.5s</span>\n      <div class=\"toolbar\"\
+    >\n        <button class=\"btn-danger\" onclick=\"clearAllData()\">Clear All Backend\
+    \ Data</button>\n      </div>\n    </div>\n\n    <div class=\"kpi-grid\">\n  \
+    \    <div class=\"kpi\"><div class=\"k\">Active CNI</div><div class=\"v\" id=\"\
+    active-cni\">--</div></div>\n      <div class=\"kpi\"><div class=\"k\">CPU Load\
+    \ (1m)</div><div class=\"v\" id=\"cpu-load\">--</div></div>\n      <div class=\"\
+    kpi\"><div class=\"k\">Avg Latency</div><div class=\"v\" id=\"avg-lat\">--</div></div>\n\
+    \      <div class=\"kpi\"><div class=\"k\">P95 Latency</div><div class=\"v\" id=\"\
+    p95-lat\">--</div></div>\n      <div class=\"kpi\"><div class=\"k\">P99 Latency</div><div\
+    \ class=\"v\" id=\"p99-lat\">--</div></div>\n      <div class=\"kpi\"><div class=\"\
+    k\">Jitter (Std Dev)</div><div class=\"v\" id=\"jitter\">--</div></div>\n    \
+    \  <div class=\"kpi\"><div class=\"k\">Throughput</div><div class=\"v\" id=\"\
+    throughput\">--</div></div>\n      <div class=\"kpi\"><div class=\"k\">Data Rate</div><div\
+    \ class=\"v\" id=\"data-rate\">--</div></div>\n      <div class=\"kpi\"><div class=\"\
+    k\">Total Records</div><div class=\"v\" id=\"records\">--</div></div>\n      <div\
+    \ class=\"kpi\"><div class=\"k\">Total Files</div><div class=\"v\" id=\"files-total\"\
+    >--</div></div>\n    </div>\n\n    <div class=\"layout\">\n      <div>\n     \
+    \   <div class=\"panel\">\n          <h3>CNI Leaderboard</h3>\n          <div\
+    \ class=\"leaderboard\">\n            <div class=\"lb-card\">\n              <div\
+    \ class=\"lb-name\" style=\"color:#7aa2f7\">Flannel</div>\n              <div\
+    \ class=\"lb-row\"><span>Avg Latency</span><b id=\"Flannel-lat\">--</b></div>\n\
+    \              <div class=\"lb-row\"><span>Peak Throughput</span><b id=\"Flannel-tps\"\
+    >--</b></div>\n              <div class=\"lb-row\"><span>Peak CPU</span><b id=\"\
+    Flannel-cpu\">--</b></div>\n              <div class=\"lb-row\"><span>Best P95</span><b\
+    \ id=\"Flannel-p95\">--</b></div>\n            </div>\n            <div class=\"\
+    lb-card\">\n              <div class=\"lb-name\" style=\"color:#f5a97f\">Calico</div>\n\
+    \              <div class=\"lb-row\"><span>Avg Latency</span><b id=\"Calico-lat\"\
+    >--</b></div>\n              <div class=\"lb-row\"><span>Peak Throughput</span><b\
+    \ id=\"Calico-tps\">--</b></div>\n              <div class=\"lb-row\"><span>Peak\
+    \ CPU</span><b id=\"Calico-cpu\">--</b></div>\n              <div class=\"lb-row\"\
+    ><span>Best P95</span><b id=\"Calico-p95\">--</b></div>\n            </div>\n\
+    \            <div class=\"lb-card\">\n              <div class=\"lb-name\" style=\"\
+    color:#8bd5a1\">Cilium</div>\n              <div class=\"lb-row\"><span>Avg Latency</span><b\
+    \ id=\"Cilium-lat\">--</b></div>\n              <div class=\"lb-row\"><span>Peak\
+    \ Throughput</span><b id=\"Cilium-tps\">--</b></div>\n              <div class=\"\
+    lb-row\"><span>Peak CPU</span><b id=\"Cilium-cpu\">--</b></div>\n            \
+    \  <div class=\"lb-row\"><span>Best P95</span><b id=\"Cilium-p95\">--</b></div>\n\
+    \            </div>\n          </div>\n          <div class=\"hint\">Overall profile\
+    \ quality: <span class=\"grade\" id=\"health-grade\">--</span></div>\n       \
+    \   <div class=\"auto-strip\">\n            <div class=\"mini\"><div class=\"\
+    k\">Auto Events (30s)</div><div class=\"v\" id=\"auto-events\">--</div></div>\n\
+    \            <div class=\"mini\"><div class=\"k\">Auto Rate (30s)</div><div class=\"\
+    v\" id=\"auto-rps\">--</div></div>\n            <div class=\"mini\"><div class=\"\
+    k\">Auto Mode</div><div class=\"v\" id=\"auto-mode\">--</div></div>\n        \
+    \    <div class=\"mini\"><div class=\"k\">Auto Session</div><div class=\"v\" id=\"\
+    auto-session\">--</div></div>\n          </div>\n        </div>\n\n        <div\
+    \ class=\"panel\" style=\"margin-top:12px;\">\n          <h3>Storage Event Ledger</h3>\n\
+    \          <table>\n            <thead><tr><th>Timestamp</th><th>Origin Node</th><th>Payload</th><th>CNI</th><th>Hop\
+    \ Latency</th><th>Action</th></tr></thead>\n            <tbody id=\"tbody\"></tbody>\n\
+    \          </table>\n        </div>\n      </div>\n\n      <div class=\"panel\"\
+    >\n        <h3>Latest Uploaded Media</h3>\n        <div class=\"media-grid\" id=\"\
+    files\"></div>\n        <div class=\"hint\">Files are persisted on Worker-2 host\
+    \ storage and can be opened or downloaded locally.</div>\n      </div>\n    </div>\n\
+    \  </div>\n</body>\n</html>\n\"\"\"\n\nclass Handler(BaseHTTPRequestHandler):\n\
+    \  def address_string(self):\n    return self.client_address[0]\n  def _send_json(self,\
+    \ payload, status=200):\n    body = json.dumps(payload).encode()\n    self.send_response(status)\n\
+    \    self.send_header(\"Content-Type\", \"application/json\")\n    self.send_header(\"\
+    Content-Length\", str(len(body)))\n    self.end_headers()\n    self.wfile.write(body)\n\
+    \n  def do_GET(self):\n    if self.path == \"/health\":\n      self._send_json({\"\
+    status\": \"healthy\", \"service\": \"service-c\"})\n      return\n\n    if self.path\
+    \ == \"/data\":\n      board, metrics = update_metrics_and_board()\n      data\
+    \ = {\n        \"service\": \"service-c\",\n        \"leaderboard\": board,\n\
+    \        \"metrics\": metrics,\n        \"messages\": list(reversed(DATABASE))[:80],\n\
+    \        \"files\": list(reversed(FILES))[:30]\n      }\n      self._send_json(data)\n\
+    \      return\n\n    if self.path.startswith(\"/files/\") or self.path.startswith(\"\
+    /media/\"):\n      is_media = self.path.startswith(\"/media/\")\n      try:\n\
+    \        file_id = int(self.path.split(\"/\")[-1])\n      except:\n        self._send_json({\"\
+    error\": \"invalid file id\"}, 400)\n        return\n\n      file_row = next((f\
+    \ for f in FILES if f.get(\"id\") == file_id), None)\n      if not file_row or\
+    \ not os.path.exists(file_row.get(\"path\", \"\")):\n        self._send_json({\"\
+    error\": \"file not found\"}, 404)\n        return\n\n      self.send_response(200)\n\
+    \      self.send_header(\"Content-Type\", file_row.get(\"content_type\", \"application/octet-stream\"\
+    ))\n      if is_media:\n        self.send_header(\"Content-Disposition\", f'inline;\
+    \ filename=\"{file_row.get(\"original_name\", \"download.bin\")}\"')\n      else:\n\
+    \        self.send_header(\"Content-Disposition\", f'attachment; filename=\"{file_row.get(\"\
+    original_name\", \"download.bin\")}\"')\n      self.send_header(\"Content-Length\"\
+    , str(os.path.getsize(file_row[\"path\"])))\n      self.end_headers()\n      with\
+    \ open(file_row[\"path\"], \"rb\") as f:\n        while True:\n          chunk\
+    \ = f.read(1024 * 1024)\n          if not chunk:\n            break\n        \
+    \  self.wfile.write(chunk)\n      return\n\n    self.send_response(200)\n    self.send_header(\"\
+    Content-Type\", \"text/html\")\n    self.end_headers()\n    self.wfile.write(HTML_DASHBOARD.encode())\n\
+    \n  def do_POST(self):\n    if self.path == \"/data\":\n      content_length =\
+    \ int(self.headers.get(\"Content-Length\", \"0\"))\n      post_data = self.rfile.read(content_length)\n\
+    \      try:\n        payload = json.loads(post_data or b\"{}\")\n        text_payload\
+    \ = payload.get(\"text\", \"\")\n        record = {\n          \"id\": next_message_id(),\n\
+    \          \"type\": \"text\",\n          \"text\": text_payload,\n          \"\
+    sender\": payload.get(\"sender_node\", \"unknown\"),\n          \"timestamp\"\
+    : time.time(),\n          \"active_cni\": os.environ.get(\"ACTIVE_CNI\", \"Flannel\"\
+    ),\n          \"cni_latency_ms\": payload.get(\"latency_ms\", 0),\n          \"\
+    payload_bytes\": len((text_payload or \"\").encode(\"utf-8\"))\n        }\n  \
+    \      DATABASE.append(record)\n        self._send_json({\"status\": \"stored\"\
+    , \"record\": record})\n      except Exception as e:\n        self._send_json({\"\
+    status\": \"error\", \"message\": str(e)}, 400)\n      return\n\n    if self.path\
+    \ == \"/upload\":\n      content_length = int(self.headers.get(\"Content-Length\"\
+    , \"0\"))\n      file_data = self.rfile.read(content_length)\n      sender = self.headers.get(\"\
+    X-Sender-Node\", \"unknown\")\n      content_type = self.headers.get(\"X-Content-Type\"\
+    , \"application/octet-stream\")\n      original_name = safe_name(urllib.parse.unquote(self.headers.get(\"\
+    X-Filename\", \"upload.bin\")))\n      latency_ms = float(self.headers.get(\"\
+    X-Latency-Ms\", \"0\") or 0)\n\n      file_id = (max([f.get(\"id\", 0) for f in\
+    \ FILES]) + 1) if FILES else 1\n      ext = os.path.splitext(original_name)[1]\n\
+    \      stored_name = f\"{int(time.time())}_{file_id}{ext}\"\n      file_path =\
+    \ os.path.join(UPLOAD_DIR, stored_name)\n\n      with open(file_path, \"wb\")\
+    \ as f:\n        f.write(file_data)\n\n      file_row = {\n        \"id\": file_id,\n\
+    \        \"original_name\": original_name,\n        \"stored_name\": stored_name,\n\
+    \        \"path\": file_path,\n        \"content_type\": content_type,\n     \
+    \   \"kind\": kind_from_type(content_type),\n        \"size_bytes\": len(file_data),\n\
+    \        \"size_human\": human_size(len(file_data)),\n        \"sender\": sender,\n\
+    \        \"timestamp\": time.time(),\n        \"active_cni\": os.environ.get(\"\
+    ACTIVE_CNI\", \"Flannel\"),\n        \"cni_latency_ms\": round(latency_ms, 2)\n\
+    \      }\n      FILES.append(file_row)\n      save_files(FILES)\n\n      DATABASE.append({\n\
+    \        \"id\": next_message_id(),\n        \"type\": \"file\",\n        \"file_id\"\
+    : file_id,\n        \"text\": file_row[\"original_name\"],\n        \"file_size_human\"\
+    : file_row[\"size_human\"],\n        \"sender\": sender,\n        \"timestamp\"\
+    : file_row[\"timestamp\"],\n        \"active_cni\": file_row[\"active_cni\"],\n\
+    \        \"cni_latency_ms\": file_row[\"cni_latency_ms\"],\n        \"payload_bytes\"\
+    : file_row[\"size_bytes\"]\n      })\n\n      self._send_json({\"status\": \"\
+    stored\", \"file\": file_row})\n      return\n\n    if self.path == \"/admin/delete\"\
+    :\n      content_length = int(self.headers.get(\"Content-Length\", \"0\"))\n \
+    \     post_data = self.rfile.read(content_length)\n      try:\n        payload\
+    \ = json.loads(post_data or b\"{}\")\n      except:\n        payload = {}\n\n\
+    \      if payload.get(\"file_id\") is not None:\n        ok = delete_file_record(int(payload.get(\"\
+    file_id\")))\n        self._send_json({\"status\": \"ok\" if ok else \"not_found\"\
+    , \"type\": \"file\"}, 200 if ok else 404)\n        return\n\n      if payload.get(\"\
+    message_id\") is not None:\n        ok = delete_message_record(int(payload.get(\"\
+    message_id\")))\n        self._send_json({\"status\": \"ok\" if ok else \"not_found\"\
+    , \"type\": \"message\"}, 200 if ok else 404)\n        return\n\n      self._send_json({\"\
+    status\": \"error\", \"message\": \"message_id or file_id required\"}, 400)\n\
+    \      return\n\n    if self.path == \"/admin/clear\":\n      clear_all_data()\n\
+    \      self._send_json({\"status\": \"ok\", \"message\": \"all backend data cleared\"\
+    })\n      return\n\n    self._send_json({\"error\": \"unsupported route\"}, 404)\n\
+    \n  def log_message(self, fmt, *args):\n    pass\n\nThreadingHTTPServer((\"0.0.0.0\"\
+    , 5002), Handler).serve_forever()\n"
+kind: ConfigMap
+metadata:
+  name: service-c-code
+  namespace: cni-benchmark
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-c
+  namespace: cni-benchmark
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-c
+  template:
+    metadata:
+      labels:
+        app: service-c
+    spec:
+      containers:
+      - command:
+        - python
+        - /app/app.py
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: ACTIVE_CNI
+          value: Flannel # REPLACE_CNI
+        image: python:3.11-slim
+        name: service-c
+        ports:
+        - containerPort: 5002
+        volumeMounts:
+        - mountPath: /app
+          name: code
+        - mountPath: /var/lib/cni-ledger
+          name: persistent-data
+      nodeSelector:
+        kubernetes.io/hostname: worker-2
+      volumes:
+      - configMap:
+          name: service-c-code
+        name: code
+      - hostPath:
+          path: /var/lib/cni-benchmark-ledger
+          type: DirectoryOrCreate
+        name: persistent-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-c
+  namespace: cni-benchmark
+spec:
+  ports:
+  - nodePort: 30081
+    port: 5002
+    targetPort: 5002
+  selector:
+    app: service-c
+  type: NodePort
+---
+apiVersion: v1
+data:
+  app.py: "import os, time, json, urllib.request, urllib.parse\nfrom http.server import\
+    \ HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer\n\nSERVICE_C_BASE =\
+    \ os.environ.get(\"SERVICE_C_BASE\", \"http://service-c.cni-benchmark.svc.cluster.local:5002\"\
+    )\nSERVICE_C_DATA = os.environ.get(\"SERVICE_C_URL\", f\"{SERVICE_C_BASE}/data\"\
+    )\nSERVICE_C_UPLOAD = os.environ.get(\"SERVICE_C_UPLOAD\", f\"{SERVICE_C_BASE}/upload\"\
+    )\n\nclass Handler(BaseHTTPRequestHandler):\n  def address_string(self):\n   \
+    \ return self.client_address[0]\n  def _send_json(self, payload, status=200):\n\
+    \    body = json.dumps(payload).encode()\n    self.send_response(status)\n   \
+    \ self.send_header(\"Content-Type\", \"application/json\")\n    self.send_header(\"\
+    Content-Length\", str(len(body)))\n    self.end_headers()\n    self.wfile.write(body)\n\
+    \n  def do_GET(self):\n    if self.path == \"/health\":\n      self._send_json({\"\
+    status\": \"healthy\", \"service\": \"service-b\"})\n      return\n\n    if self.path\
+    \ == \"/history\":\n      try:\n        with urllib.request.urlopen(SERVICE_C_DATA,\
+    \ timeout=20) as r:\n          payload = r.read()\n        self.send_response(200)\n\
+    \        self.send_header(\"Content-Type\", \"application/json\")\n        self.send_header(\"\
+    Content-Length\", str(len(payload)))\n        self.end_headers()\n        self.wfile.write(payload)\n\
+    \      except Exception as e:\n        self._send_json({\"error\": str(e)}, 502)\n\
+    \      return\n\n    if self.path.startswith(\"/download\") or self.path.startswith(\"\
+    /media\"):\n      try:\n        query = urllib.parse.urlparse(self.path).query\n\
+    \        file_id = urllib.parse.parse_qs(query).get(\"id\", [\"\"])[0]\n     \
+    \   if not file_id:\n          self._send_json({\"error\": \"missing id\"}, 400)\n\
+    \          return\n        target = f\"{SERVICE_C_BASE}/files/{file_id}\" if self.path.startswith(\"\
+    /download\") else f\"{SERVICE_C_BASE}/media/{file_id}\"\n        with urllib.request.urlopen(target,\
+    \ timeout=900) as r:\n          content_type = r.headers.get(\"Content-Type\"\
+    , \"application/octet-stream\")\n          disposition = r.headers.get(\"Content-Disposition\"\
+    )\n          content_length = r.headers.get(\"Content-Length\")\n\n          self.send_response(200)\n\
+    \          self.send_header(\"Content-Type\", content_type)\n          if disposition:\n\
+    \            self.send_header(\"Content-Disposition\", disposition)\n        \
+    \  if content_length:\n            self.send_header(\"Content-Length\", content_length)\n\
+    \          self.end_headers()\n          while True:\n            chunk = r.read(1024\
+    \ * 1024)\n            if not chunk:\n              break\n            self.wfile.write(chunk)\n\
+    \      except Exception as e:\n        self._send_json({\"error\": str(e)}, 502)\n\
+    \      return\n\n    self._send_json({\"error\": \"unsupported route\"}, 404)\n\
+    \n  def do_POST(self):\n    if self.path == \"/process\":\n      start = time.time()\n\
+    \      content_length = int(self.headers.get(\"Content-Length\", \"0\"))\n   \
+    \   post_data = self.rfile.read(content_length)\n\n      try:\n        payload\
+    \ = json.loads(post_data or b\"{}\")\n        time.sleep(0.005)\n        hop_time_ms\
+    \ = round((time.time() - start) * 1000, 2)\n\n        db_payload = {\n       \
+    \   \"text\": payload.get(\"text\", \"\"),\n          \"sender_node\": payload.get(\"\
+    node\", \"unknown\"),\n          \"latency_ms\": hop_time_ms\n        }\n    \
+    \    req = urllib.request.Request(\n          SERVICE_C_DATA,\n          data=json.dumps(db_payload).encode(),\n\
+    \          headers={\"Content-Type\": \"application/json\"}\n        )\n     \
+    \   with urllib.request.urlopen(req, timeout=20) as r:\n          _ = r.read()\n\
+    \n        final_ms = round((time.time() - start) * 1000, 2)\n        self._send_json({\"\
+    status\": \"success\", \"total_processing\": final_ms, \"hop_latency\": hop_time_ms})\n\
+    \      except Exception as e:\n        self._send_json({\"status\": \"error\"\
+    , \"error\": str(e)}, 502)\n      return\n\n    if self.path == \"/upload\":\n\
+    \      start = time.time()\n      content_length = int(self.headers.get(\"Content-Length\"\
+    , \"0\"))\n      body = self.rfile.read(content_length)\n      sender = self.headers.get(\"\
+    X-Sender-Node\", \"unknown\")\n      filename = self.headers.get(\"X-Filename\"\
+    , \"upload.bin\")\n      content_type = self.headers.get(\"X-Content-Type\", \"\
+    application/octet-stream\")\n\n      try:\n        time.sleep(0.005)\n       \
+    \ hop_time_ms = round((time.time() - start) * 1000, 2)\n        req = urllib.request.Request(\n\
+    \          SERVICE_C_UPLOAD,\n          data=body,\n          headers={\n    \
+    \        \"Content-Type\": \"application/octet-stream\",\n            \"X-Filename\"\
+    : filename,\n            \"X-Content-Type\": content_type,\n            \"X-Sender-Node\"\
+    : sender,\n            \"X-Latency-Ms\": str(hop_time_ms)\n          }\n     \
+    \   )\n        with urllib.request.urlopen(req, timeout=1200) as r:\n        \
+    \  response = r.read()\n\n        self.send_response(200)\n        self.send_header(\"\
+    Content-Type\", \"application/json\")\n        self.send_header(\"Content-Length\"\
+    , str(len(response)))\n        self.end_headers()\n        self.wfile.write(response)\n\
+    \      except Exception as e:\n        self._send_json({\"status\": \"error\"\
+    , \"error\": str(e)}, 502)\n      return\n\n    self._send_json({\"error\": \"\
+    unsupported route\"}, 404)\n\n  def log_message(self, fmt, *args):\n    pass\n\
+    \nThreadingHTTPServer((\"0.0.0.0\", 5001), Handler).serve_forever()\n"
+kind: ConfigMap
+metadata:
+  name: service-b-code
+  namespace: cni-benchmark
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-b
+  namespace: cni-benchmark
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-b
+  template:
+    metadata:
+      labels:
+        app: service-b
+    spec:
+      containers:
+      - command:
+        - python
+        - /app/app.py
+        env:
+        - name: SERVICE_C_URL
+          value: http://service-c.cni-benchmark.svc.cluster.local:5002/data
+        image: python:3.11-slim
+        name: service-b
+        ports:
+        - containerPort: 5001
+        volumeMounts:
+        - mountPath: /app
+          name: code
+      nodeSelector:
+        kubernetes.io/hostname: worker-2
+      volumes:
+      - configMap:
+          name: service-b-code
+        name: code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-b
+  namespace: cni-benchmark
+spec:
+  ports:
+  - port: 5001
+    targetPort: 5001
+  selector:
+    app: service-b
+---
+apiVersion: v1
+data:
+  app.py: "import os, json, urllib.request, urllib.parse\nfrom http.server import\
+    \ HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer\n\nSERVICE_B = os.environ.get(\"\
+    SERVICE_B_URL\", \"http://service-b.cni-benchmark.svc.cluster.local:5001\")\n\n\
+    HTML_PAGE = \"\"\"\n<!DOCTYPE html>\n<html>\n<head>\n  <title>Worker-1 CNI Test\
+    \ Console</title>\n  <style>\n    :root {\n      --bg: #0f111a;\n      --panel:\
+    \ #161b25;\n      --panel-2: #1f2735;\n      --line: #2f3b50;\n      --text: #e8edf4;\n\
+    \      --muted: #9aa7b8;\n      --accent: #7aa2f7;\n    }\n    * { box-sizing:\
+    \ border-box; }\n    body { margin: 0; font-family: 'Inter', 'Segoe UI', sans-serif;\
+    \ background: linear-gradient(145deg, #0f111a, #141b2a); color: var(--text); }\n\
+    \    .container { max-width: 1450px; margin: 0 auto; padding: 18px; }\n    .hero\
+    \ { background: var(--panel); border: 1px solid var(--line); border-radius: 15px;\
+    \ padding: 16px; margin-bottom: 12px; }\n    .hero h1 { margin: 0 0 6px; font-size:\
+    \ 24px; }\n    .hero p { margin: 0; color: var(--muted); }\n    .badge { margin-top:\
+    \ 10px; display: inline-block; font-size: 12px; border-radius: 999px; border:\
+    \ 1px solid #374867; background: #1c2738; color: #c8d9fb; padding: 6px 10px; }\n\
+    \    .layout { display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; }\n\
+    \    .card { background: var(--panel); border: 1px solid var(--line); border-radius:\
+    \ 13px; padding: 12px; }\n    .card h3 { margin: 0 0 10px; font-size: 15px; color:\
+    \ #d8e2f1; }\n    .chat-box { height: 440px; overflow-y: auto; overflow-x: hidden;\
+    \ border: 1px solid var(--line); border-radius: 10px; background: #101624; padding:\
+    \ 10px; }\n    .msg { background: linear-gradient(140deg, #1a2233, #222d40); border:\
+    \ 1px solid #32425f; border-radius: 10px; margin-bottom: 8px; padding: 8px; max-width:\
+    \ 100%; overflow-wrap: anywhere; word-break: break-word; }\n    .msg-text { display:\
+    \ block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow:\
+    \ ellipsis; color: #eef4ff; font-weight: 600; }\n    .meta { font-size: 11px;\
+    \ color: #9fb0c8; margin-bottom: 4px; }\n    .mtr { font-size: 12px; color: #a9e7b9;\
+    \ }\n    .row { display: flex; gap: 8px; margin-top: 10px; }\n    input[type=\"\
+    text\"], input[type=\"number\"], select { width: 100%; border-radius: 9px; border:\
+    \ 1px solid #3b4a66; background: #111a29; color: var(--text); padding: 9px; }\n\
+    \    input[type=\"file\"] { width: 100%; border-radius: 9px; border: 1px solid\
+    \ #3b4a66; background: #111a29; color: var(--text); padding: 8px; }\n    button\
+    \ { border: none; border-radius: 9px; background: linear-gradient(145deg, #7aa2f7,\
+    \ #8b9bff); color: #0e1420; font-weight: 700; padding: 9px 12px; cursor: pointer;\
+    \ }\n    .btn-alt { background: linear-gradient(145deg, #8bd5a1, #9ad9c1); }\n\
+    \    .btn-stop { background: linear-gradient(145deg, #f38ba8, #f5a97f); }\n  \
+    \  button:disabled { opacity: 0.55; cursor: wait; }\n    .hint { font-size: 12px;\
+    \ color: var(--muted); margin-top: 6px; line-height: 1.4; }\n    .stat-grid {\
+    \ display: grid; grid-template-columns: repeat(2, minmax(130px, 1fr)); gap: 8px;\
+    \ margin-bottom: 10px; }\n    .stat { background: #121a29; border: 1px solid var(--line);\
+    \ border-radius: 10px; padding: 9px; }\n    .stat .k { font-size: 11px; color:\
+    \ var(--muted); }\n    .stat .v { font-size: 18px; font-weight: 700; color: #f2f6ff;\
+    \ }\n    .control-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px;\
+    \ }\n    .control-grid .full { grid-column: 1 / span 2; }\n    .status-line {\
+    \ margin-top: 8px; font-size: 12px; color: #c9d8ef; }\n    .preset { font-size:\
+    \ 12px; color: #c2d2e9; border: 1px solid #3a4b67; background: #172234; padding:\
+    \ 5px 8px; border-radius: 8px; cursor: pointer; }\n    .media-grid { display:\
+    \ grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 8px;\
+    \ }\n    .media-item { background: #111927; border: 1px solid var(--line); border-radius:\
+    \ 10px; padding: 7px; }\n    .media-item img, .media-item video { width: 100%;\
+    \ max-height: 120px; object-fit: cover; border-radius: 7px; background: #0d1420;\
+    \ }\n    .media-meta { font-size: 11px; color: var(--muted); margin-top: 5px;\
+    \ line-height: 1.35; }\n    .media-actions a { color: var(--accent); text-decoration:\
+    \ none; margin-right: 8px; font-size: 11px; }\n  </style>\n  <script>\n    let\
+    \ loadTimer = null;\n    let loadStartedAt = 0;\n    let loadDurationMs = 0;\n\
+    \    let tokenBucket = 0;\n    let generatedCount = 0;\n    let successCount =\
+    \ 0;\n    let failedCount = 0;\n    let inFlight = 0;\n    let activeSessionId\
+    \ = '--';\n\n    function esc(t) {\n      return (t || '').replace(/[&<>\\\"']/g,\
+    \ c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\\\"':'&quot;',\"'\":'&#39;'}[c]));\n\
+    \    }\n\n    function setBusy(id, value) {\n      const el = document.getElementById(id);\n\
+    \      if (el) el.disabled = value;\n    }\n\n    function randomText(size) {\n\
+    \      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';\n\
+    \      let out = '';\n      for (let i = 0; i < size; i++) {\n        out += chars.charAt(Math.floor(Math.random()\
+    \ * chars.length));\n        if (i > 0 && i % 12 === 0) out += ' ';\n      }\n\
+    \      return out;\n    }\n\n    function parseNum(id, fallback) {\n      const\
+    \ n = Number((document.getElementById(id).value || '').trim());\n      return\
+    \ Number.isFinite(n) ? n : fallback;\n    }\n\n    function applyPreset(name)\
+    \ {\n      if (name === 'latency') {\n        document.getElementById('mode').value\
+    \ = 'constant';\n        document.getElementById('const-rps').value = '2';\n \
+    \       document.getElementById('min-rps').value = '2';\n        document.getElementById('max-rps').value\
+    \ = '5';\n        document.getElementById('duration').value = '60';\n        document.getElementById('min-size').value\
+    \ = '64';\n        document.getElementById('max-size').value = '128';\n      }\n\
+    \      if (name === 'throughput') {\n        document.getElementById('mode').value\
+    \ = 'constant';\n        document.getElementById('const-rps').value = '35';\n\
+    \        document.getElementById('min-rps').value = '20';\n        document.getElementById('max-rps').value\
+    \ = '60';\n        document.getElementById('duration').value = '60';\n       \
+    \ document.getElementById('min-size').value = '4096';\n        document.getElementById('max-size').value\
+    \ = '16384';\n      }\n      if (name === 'realistic') {\n        document.getElementById('mode').value\
+    \ = 'fluctuate';\n        document.getElementById('const-rps').value = '10';\n\
+    \        document.getElementById('min-rps').value = '4';\n        document.getElementById('max-rps').value\
+    \ = '30';\n        document.getElementById('duration').value = '90';\n       \
+    \ document.getElementById('min-size').value = '256';\n        document.getElementById('max-size').value\
+    \ = '4096';\n      }\n      updateModeUI();\n    }\n\n    function updateModeUI()\
+    \ {\n      const mode = document.getElementById('mode').value;\n      document.getElementById('const-wrap').style.display\
+    \ = mode === 'constant' ? 'block' : 'none';\n      document.getElementById('fluct-wrap').style.display\
+    \ = mode === 'fluctuate' ? 'grid' : 'none';\n    }\n\n    function currentTargetRps(elapsedMs)\
+    \ {\n      const mode = document.getElementById('mode').value;\n      if (mode\
+    \ === 'constant') {\n        return Math.max(0.1, parseNum('const-rps', 2));\n\
+    \      }\n      const minR = Math.max(0.1, parseNum('min-rps', 2));\n      const\
+    \ maxR = Math.max(minR, parseNum('max-rps', 10));\n      const wave = 0.5 + 0.5\
+    \ * Math.sin((elapsedMs / 1000) * (2 * Math.PI / 5));\n      return minR + (maxR\
+    \ - minR) * wave;\n    }\n\n    function updateLoadStatus(extra) {\n      const\
+    \ line = document.getElementById('load-status');\n      const elapsed = loadTimer\
+    \ ? ((Date.now() - loadStartedAt) / 1000).toFixed(1) : '0.0';\n      line.innerText\
+    \ = `Load Status: ${loadTimer ? 'RUNNING' : 'IDLE'} | Elapsed: ${elapsed}s | Sent:\
+    \ ${generatedCount} | Success: ${successCount} | Failed: ${failedCount}${extra\
+    \ ? ' | ' + extra : ''}`;\n    }\n\n    function startLoad() {\n      if (loadTimer)\
+    \ return;\n      const durationSec = Math.max(5, parseNum('duration', 30));\n\
+    \      const minSize = Math.max(16, parseNum('min-size', 64));\n      const maxSize\
+    \ = Math.max(minSize, parseNum('max-size', 256));\n      const mode = document.getElementById('mode').value;\n\
+    \n      loadDurationMs = durationSec * 1000;\n      loadStartedAt = Date.now();\n\
+    \      activeSessionId = Math.random().toString(36).slice(2, 10);\n      tokenBucket\
+    \ = 0;\n      generatedCount = 0;\n      successCount = 0;\n      failedCount\
+    \ = 0;\n\n      setBusy('start-load-btn', true);\n      setBusy('stop-load-btn',\
+    \ false);\n\n      loadTimer = setInterval(() => {\n        const elapsed = Date.now()\
+    \ - loadStartedAt;\n        if (elapsed >= loadDurationMs) {\n          stopLoad('Completed\
+    \ by duration');\n          return;\n        }\n\n        const rps = currentTargetRps(elapsed);\n\
+    \        tokenBucket += rps * 0.1;\n        const toSend = Math.floor(tokenBucket);\n\
+    \        tokenBucket -= toSend;\n\n        for (let i = 0; i < toSend; i++) {\n\
+    \          if (inFlight > 40) break;\n          const sz = minSize + Math.floor(Math.random()\
+    \ * (maxSize - minSize + 1));\n          const payload = `[AUTO|${mode}|${activeSessionId}|${generatedCount\
+    \ + 1}] ` + randomText(sz);\n          generatedCount += 1;\n          inFlight\
+    \ += 1;\n          fetch('/api/send', {\n            method: 'POST',\n       \
+    \     headers: {'Content-Type': 'application/json'},\n            body: JSON.stringify({text:\
+    \ payload})\n          }).then(() => {\n            successCount += 1;\n     \
+    \     }).catch(() => {\n            failedCount += 1;\n          }).finally(()\
+    \ => {\n            inFlight -= 1;\n          });\n        }\n        updateLoadStatus(`Target:\
+    \ ${rps.toFixed(1)} rps | Session: ${activeSessionId}`);\n      }, 100);\n   \
+    \   updateLoadStatus(`Load test started | Session: ${activeSessionId}`);\n   \
+    \ }\n\n    function stopLoad(reason) {\n      if (loadTimer) {\n        clearInterval(loadTimer);\n\
+    \        loadTimer = null;\n      }\n      setBusy('start-load-btn', false);\n\
+    \      setBusy('stop-load-btn', true);\n      updateLoadStatus(reason || 'Stopped');\n\
+    \      activeSessionId = '--';\n      setTimeout(reloadData, 700);\n    }\n\n\
+    \    function reloadData() {\n      fetch('/api/history').then(r => r.json()).then(data\
+    \ => {\n        const m = data.metrics || {};\n        document.getElementById('cni').innerText\
+    \ = m.active_cni || '--';\n        document.getElementById('lat').innerText =\
+    \ (m.avg_latency_ms || 0) + ' ms';\n        document.getElementById('p95').innerText\
+    \ = (m.p95_latency_ms || 0) + ' ms';\n        document.getElementById('tps').innerText\
+    \ = (m.throughput_rps || 0) + ' req/s';\n        document.getElementById('rate').innerText\
+    \ = (m.data_rate_mbps || 0) + ' MB/s';\n        document.getElementById('cpu').innerText\
+    \ = (m.cpu_load_1m || 0) + ' load';\n        document.getElementById('grade').innerText\
+    \ = m.health_grade || '--';\n\n        const box = document.getElementById('chat-box');\n\
+    \        box.innerHTML = '';\n        (data.messages || []).slice(0, 100).forEach(mg\
+    \ => {\n          if ((mg.text || '').startsWith('[AUTO|')) return;\n        \
+    \  const text = mg.type === 'file'\n            ? `<a class=\"msg-text\" style=\"\
+    color:#7aa2f7\" href=\"/api/download?id=${mg.file_id}\" target=\"_blank\" title=\"\
+    ${esc(mg.text)}\">${esc(mg.text)}</a> (${esc(mg.file_size_human || '')})`\n  \
+    \          : `<span class=\"msg-text\" title=\"${esc(mg.text)}\">${esc(mg.text)}</span>`;\n\
+    \          box.innerHTML += `<div class=\"msg\"><div class=\"meta\">${new Date(mg.timestamp\
+    \ * 1000).toLocaleTimeString()} | ${esc(mg.sender)} | ${esc(mg.active_cni || '')}</div><div>${text}</div><div\
+    \ class=\"mtr\">Hop Latency: ${mg.cni_latency_ms || 0} ms</div></div>`;\n    \
+    \    });\n\n        const media = document.getElementById('media-grid');\n   \
+    \     media.innerHTML = '';\n        (data.files || []).slice(0, 8).forEach(f\
+    \ => {\n          const preview = f.kind === 'image'\n            ? `<img src=\"\
+    /api/media?id=${f.id}\" alt=\"${esc(f.original_name)}\"/>`\n            : (f.kind\
+    \ === 'video' ? `<div class=\"hint\">Video file (${esc(f.size_human || '')})</div>`\
+    \ : `<div class=\"hint\">No preview</div>`);\n\n          media.innerHTML += `<div\
+    \ class=\"media-item\">${preview}<div class=\"media-meta\"><b>${esc(f.original_name)}</b><br>${esc(f.sender)}\
+    \ | ${esc(f.size_human || '')}</div><div class=\"media-actions\"><a href=\"/api/media?id=${f.id}\"\
+    \ target=\"_blank\">Open</a><a href=\"/api/download?id=${f.id}\" target=\"_blank\"\
+    >Download</a></div></div>`;\n        });\n      }).catch(() => {});\n    }\n\n\
+    \    function sendMessage() {\n      const input = document.getElementById('txt');\n\
+    \      if (!input.value.trim()) return;\n      setBusy('send-btn', true);\n  \
+    \    fetch('/api/send', {\n        method: 'POST',\n        headers: {'Content-Type':\
+    \ 'application/json'},\n        body: JSON.stringify({text: input.value})\n  \
+    \    }).then(() => {\n        input.value = '';\n        setBusy('send-btn', false);\n\
+    \        setTimeout(reloadData, 250);\n      }).catch(() => setBusy('send-btn',\
+    \ false));\n    }\n\n    function uploadFile() {\n      const fileInput = document.getElementById('file');\n\
+    \      if (!fileInput.files.length) return;\n      const file = fileInput.files[0];\n\
+    \      setBusy('upload-btn', true);\n\n      fetch('/api/upload', {\n        method:\
+    \ 'POST',\n        headers: {\n          'X-Filename': encodeURIComponent(file.name),\n\
+    \          'X-Content-Type': file.type || 'application/octet-stream'\n       \
+    \ },\n        body: file\n      }).then(() => {\n        fileInput.value = '';\n\
+    \        setBusy('upload-btn', false);\n        setTimeout(reloadData, 500);\n\
+    \      }).catch(() => setBusy('upload-btn', false));\n    }\n\n    window.onload\
+    \ = () => {\n      updateModeUI();\n      setBusy('stop-load-btn', true);\n  \
+    \    updateLoadStatus('Ready');\n      reloadData();\n      setInterval(reloadData,\
+    \ 5000);\n    };\n  </script>\n</head>\n<body>\n  <div class=\"container\">\n\
+    \    <div class=\"hero\">\n      <h1>Worker-1 CNI Experiment Console</h1>\n  \
+    \    <p>Interactive control plane for messaging, media transfer, and benchmark\
+    \ traffic generation.</p>\n      <span class=\"badge\">Running on node: \"\"\"\
+    \ + os.environ.get(\"NODE_NAME\", \"worker-1\") + \"\"\"</span>\n    </div>\n\n\
+    \    <div class=\"layout\">\n      <div class=\"card\">\n        <h3>Live Payload\
+    \ Timeline</h3>\n        <div class=\"chat-box\" id=\"chat-box\"></div>\n    \
+    \    <div class=\"row\">\n          <input type=\"text\" id=\"txt\" placeholder=\"\
+    Type payload message\" onkeydown=\"if(event.key==='Enter') sendMessage()\" autocomplete=\"\
+    off\" />\n          <button id=\"send-btn\" onclick=\"sendMessage()\">Send Message</button>\n\
+    \        </div>\n        <div class=\"row\">\n          <input type=\"file\" id=\"\
+    file\" accept=\"image/*,video/*\" />\n          <button id=\"upload-btn\" class=\"\
+    btn-alt\" onclick=\"uploadFile()\">Upload Media</button>\n        </div>\n   \
+    \     <div class=\"hint\">Use larger media files to stress test CNI throughput\
+    \ and storage path.</div>\n      </div>\n\n      <div class=\"card\">\n      \
+    \  <h3>Real-Time CNI Metrics</h3>\n        <div class=\"stat-grid\">\n       \
+    \   <div class=\"stat\"><div class=\"k\">Active CNI</div><div class=\"v\" id=\"\
+    cni\">--</div></div>\n          <div class=\"stat\"><div class=\"k\">Avg Latency</div><div\
+    \ class=\"v\" id=\"lat\">--</div></div>\n          <div class=\"stat\"><div class=\"\
+    k\">P95 Latency</div><div class=\"v\" id=\"p95\">--</div></div>\n          <div\
+    \ class=\"stat\"><div class=\"k\">Throughput</div><div class=\"v\" id=\"tps\"\
+    >--</div></div>\n          <div class=\"stat\"><div class=\"k\">Data Rate</div><div\
+    \ class=\"v\" id=\"rate\">--</div></div>\n          <div class=\"stat\"><div class=\"\
+    k\">CPU Load (1m)</div><div class=\"v\" id=\"cpu\">--</div></div>\n        </div>\n\
+    \        <div class=\"hint\">Performance Grade: <b id=\"grade\">--</b></div>\n\
+    \n        <h3 style=\"margin-top:12px;\">Traffic Generator</h3>\n        <div\
+    \ class=\"control-grid\">\n          <div>\n            <label class=\"hint\"\
+    >Mode</label>\n            <select id=\"mode\" onchange=\"updateModeUI()\">\n\
+    \              <option value=\"constant\">Constant Rate</option>\n           \
+    \   <option value=\"fluctuate\">Fluctuating Rate</option>\n            </select>\n\
+    \          </div>\n          <div id=\"const-wrap\">\n            <label class=\"\
+    hint\">Constant RPS</label>\n            <input type=\"number\" id=\"const-rps\"\
+    \ min=\"0.1\" step=\"0.1\" value=\"12\" />\n          </div>\n          <div id=\"\
+    fluct-wrap\" class=\"full\" style=\"display:none; grid-template-columns:1fr 1fr;\
+    \ gap:8px;\">\n            <div>\n              <label class=\"hint\">Min RPS</label>\n\
+    \              <input type=\"number\" id=\"min-rps\" min=\"0.1\" step=\"0.1\"\
+    \ value=\"2\" />\n            </div>\n            <div>\n              <label\
+    \ class=\"hint\">Max RPS</label>\n              <input type=\"number\" id=\"max-rps\"\
+    \ min=\"0.1\" step=\"0.1\" value=\"15\" />\n            </div>\n          </div>\n\
+    \          <div>\n            <label class=\"hint\">Duration (seconds)</label>\n\
+    \            <input type=\"number\" id=\"duration\" min=\"5\" step=\"1\" value=\"\
+    30\" />\n          </div>\n          <div>\n            <label class=\"hint\"\
+    >Payload Size Range (bytes)</label>\n            <div class=\"row\" style=\"margin-top:0;\"\
+    >\n              <input type=\"number\" id=\"min-size\" min=\"16\" step=\"1\"\
+    \ value=\"1024\" />\n              <input type=\"number\" id=\"max-size\" min=\"\
+    16\" step=\"1\" value=\"4096\" />\n            </div>\n          </div>\n    \
+    \      <div class=\"full row\">\n            <button onclick=\"applyPreset('latency')\"\
+    \ class=\"preset\" type=\"button\">Latency Preset</button>\n            <button\
+    \ onclick=\"applyPreset('throughput')\" class=\"preset\" type=\"button\">Throughput\
+    \ Preset</button>\n            <button onclick=\"applyPreset('realistic')\" class=\"\
+    preset\" type=\"button\">Realistic Preset</button>\n          </div>\n       \
+    \   <div class=\"full row\">\n            <button id=\"start-load-btn\" onclick=\"\
+    startLoad()\">Start Generator</button>\n            <button id=\"stop-load-btn\"\
+    \ class=\"btn-stop\" onclick=\"stopLoad('Stopped by operator')\">Stop Generator</button>\n\
+    \          </div>\n        </div>\n        <div id=\"load-status\" class=\"status-line\"\
+    >Load Status: IDLE</div>\n        <div class=\"hint\">Constant mode sends at fixed\
+    \ RPS; Fluctuating mode simulates bursty real-user traffic using sinusoidal variation.</div>\n\
+    \      </div>\n\n      <div class=\"card\">\n        <h3>Backend Stored Media</h3>\n\
+    \        <div class=\"media-grid\" id=\"media-grid\"></div>\n        <div class=\"\
+    hint\">Open or download files directly from the backend ledger for demonstration.</div>\n\
+    \      </div>\n    </div>\n  </div>\n</body>\n</html>\n\"\"\"\n\nclass Handler(BaseHTTPRequestHandler):\n\
+    \  def address_string(self):\n    return self.client_address[0]\n  def _send_json(self,\
+    \ payload, status=200):\n    body = json.dumps(payload).encode()\n    self.send_response(status)\n\
+    \    self.send_header(\"Content-Type\", \"application/json\")\n    self.send_header(\"\
+    Content-Length\", str(len(body)))\n    self.end_headers()\n    self.wfile.write(body)\n\
+    \n  def do_GET(self):\n    if self.path == \"/health\":\n      self._send_json({\"\
+    status\": \"healthy\", \"service\": \"service-a\"})\n      return\n\n    if self.path\
+    \ == \"/api/history\":\n      try:\n        with urllib.request.urlopen(f\"{SERVICE_B}/history\"\
+    , timeout=20) as r:\n          data = r.read()\n        self.send_response(200)\n\
+    \        self.send_header(\"Content-Type\", \"application/json\")\n        self.send_header(\"\
+    Content-Length\", str(len(data)))\n        self.end_headers()\n        self.wfile.write(data)\n\
+    \      except Exception as e:\n        self._send_json({\"error\": str(e)}, 502)\n\
+    \      return\n\n    if self.path.startswith(\"/api/download\") or self.path.startswith(\"\
+    /api/media\"):\n      try:\n        query = urllib.parse.urlparse(self.path).query\n\
+    \        file_id = urllib.parse.parse_qs(query).get(\"id\", [\"\"])[0]\n     \
+    \   if not file_id:\n          self._send_json({\"error\": \"missing id\"}, 400)\n\
+    \          return\n        target = f\"{SERVICE_B}/download?id={file_id}\" if\
+    \ self.path.startswith(\"/api/download\") else f\"{SERVICE_B}/media?id={file_id}\"\
+    \n        with urllib.request.urlopen(target, timeout=900) as r:\n          content_type\
+    \ = r.headers.get(\"Content-Type\", \"application/octet-stream\")\n          disposition\
+    \ = r.headers.get(\"Content-Disposition\")\n          content_length = r.headers.get(\"\
+    Content-Length\")\n          self.send_response(200)\n          self.send_header(\"\
+    Content-Type\", content_type)\n          if disposition:\n            self.send_header(\"\
+    Content-Disposition\", disposition)\n          if content_length:\n          \
+    \  self.send_header(\"Content-Length\", content_length)\n          self.end_headers()\n\
+    \          while True:\n            chunk = r.read(1024 * 1024)\n            if\
+    \ not chunk:\n              break\n            self.wfile.write(chunk)\n     \
+    \ except Exception as e:\n        self._send_json({\"error\": str(e)}, 502)\n\
+    \      return\n\n    self.send_response(200)\n    self.send_header(\"Content-Type\"\
+    , \"text/html\")\n    self.end_headers()\n    self.wfile.write(HTML_PAGE.encode())\n\
+    \n  def do_POST(self):\n    if self.path == \"/api/send\":\n      content_length\
+    \ = int(self.headers.get(\"Content-Length\", \"0\"))\n      post_data = self.rfile.read(content_length)\n\
+    \      try:\n        payload = json.loads(post_data or b\"{}\")\n      except:\n\
+    \        payload = {}\n\n      b_payload = {\n        \"text\": payload.get(\"\
+    text\", \"\"),\n        \"node\": os.environ.get(\"NODE_NAME\", \"worker-1\")\n\
+    \      }\n\n      try:\n        req = urllib.request.Request(\n          f\"{SERVICE_B}/process\"\
+    ,\n          data=json.dumps(b_payload).encode(),\n          headers={\"Content-Type\"\
+    : \"application/json\"}\n        )\n        with urllib.request.urlopen(req, timeout=20)\
+    \ as r:\n          response = r.read()\n        self.send_response(200)\n    \
+    \    self.send_header(\"Content-Type\", \"application/json\")\n        self.send_header(\"\
+    Content-Length\", str(len(response)))\n        self.end_headers()\n        self.wfile.write(response)\n\
+    \      except Exception as e:\n        self._send_json({\"error\": str(e)}, 502)\n\
+    \      return\n\n    if self.path == \"/api/upload\":\n      content_length =\
+    \ int(self.headers.get(\"Content-Length\", \"0\"))\n      body = self.rfile.read(content_length)\n\
+    \      filename = self.headers.get(\"X-Filename\", \"upload.bin\")\n      content_type\
+    \ = self.headers.get(\"X-Content-Type\", \"application/octet-stream\")\n\n   \
+    \   try:\n        req = urllib.request.Request(\n          f\"{SERVICE_B}/upload\"\
+    ,\n          data=body,\n          headers={\n            \"Content-Type\": \"\
+    application/octet-stream\",\n            \"X-Filename\": filename,\n         \
+    \   \"X-Content-Type\": content_type,\n            \"X-Sender-Node\": os.environ.get(\"\
+    NODE_NAME\", \"worker-1\")\n          }\n        )\n        with urllib.request.urlopen(req,\
+    \ timeout=1800) as r:\n          response = r.read()\n\n        self.send_response(200)\n\
+    \        self.send_header(\"Content-Type\", \"application/json\")\n        self.send_header(\"\
+    Content-Length\", str(len(response)))\n        self.end_headers()\n        self.wfile.write(response)\n\
+    \      except Exception as e:\n        self._send_json({\"error\": str(e)}, 502)\n\
+    \      return\n\n    self._send_json({\"error\": \"unsupported route\"}, 404)\n\
+    \n  def log_message(self, fmt, *args):\n    pass\n\nThreadingHTTPServer((\"0.0.0.0\"\
+    , 5000), Handler).serve_forever()\n"
+kind: ConfigMap
+metadata:
+  name: service-a-code
+  namespace: cni-benchmark
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-a
+  namespace: cni-benchmark
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-a
+  template:
+    metadata:
+      labels:
+        app: service-a
+    spec:
+      containers:
+      - command:
+        - python
+        - /app/app.py
+        env:
+        - name: SERVICE_B_URL
+          value: http://service-b.cni-benchmark.svc.cluster.local:5001
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        image: python:3.11-slim
+        name: service-a
+        ports:
+        - containerPort: 5000
+        volumeMounts:
+        - mountPath: /app
+          name: code
+      nodeSelector:
+        kubernetes.io/hostname: worker-1
+      volumes:
+      - configMap:
+          name: service-a-code
+        name: code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-a
+  namespace: cni-benchmark
+spec:
+  ports:
+  - nodePort: 30080
+    port: 5000
+    targetPort: 5000
+  selector:
+    app: service-a
+  type: NodePort

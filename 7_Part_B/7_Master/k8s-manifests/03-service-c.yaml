@@ -1,0 +1,79 @@
+# AI Declaration: This script skeleton was generated with AI assistance and must be reviewed by the team.
+
+###############################################################################
+# Service C - Mock Database Deployment & Service
+# Pinned to Worker-2 via nodeSelector
+###############################################################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-c
+  namespace: cni-benchmark
+  labels:
+    app: service-c
+    tier: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-c
+  template:
+    metadata:
+      labels:
+        app: service-c
+        tier: database
+    spec:
+      # Pin Service C to Worker-2
+      nodeSelector:
+        service-placement: service-c
+      containers:
+        - name: service-c
+          image: cniproject/service-c:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5002
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5002
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-c
+  namespace: cni-benchmark
+  labels:
+    app: service-c
+spec:
+  type: ClusterIP
+  selector:
+    app: service-c
+  ports:
+    - name: http
+      protocol: TCP
+      port: 5002
+      targetPort: 5002

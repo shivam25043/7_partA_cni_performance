@@ -1,0 +1,46 @@
+# AI Declaration: This script skeleton was generated with AI assistance and must be reviewed by the team.
+
+{
+  "cni": "flannel",
+  "timestamp": "20260418_191631",
+  "target_url": "http://192.168.192.166:30080/",
+  "benchmark_scope": "A->B->C chain via service-a NodePort",
+  "total_requests": 500,
+  "successful_requests": 500,
+  "errors": 0,
+  "latency_ms": {
+    "min": 1.984,
+    "avg": 2.431,
+    "p50": 2.404,
+    "p75": 2.549,
+    "p90": 2.721,
+    "p95": 2.802,
+    "p99": 2.951,
+    "max": 3.075
+  },
+  "throughput_rps_estimated": 411.28,
+  "resource_overhead": {
+    "metrics_server_available": false,
+    "node_cpu_avg_millicores": null,
+    "node_cpu_max_millicores": null,
+    "node_memory_avg_mib": null,
+    "node_memory_max_mib": null,
+    "benchmark_pod_cpu_total_millicores": null,
+    "benchmark_pod_memory_total_mib": null,
+    "service_cpu_millicores": {
+      "service-a": 0.0,
+      "service-b": 0.0,
+      "service-c": 0.0
+    },
+    "service_memory_mib": {
+      "service-a": 0.0,
+      "service-b": 0.0,
+      "service-c": 0.0
+    }
+  },
+  "artifacts": {
+    "latency_raw_file": "/home/iiitd/FILE/7_partA_cni_performance/Part_B/Master/data/flannel_20260418_191631_raw.txt",
+    "node_top_file": "/home/iiitd/FILE/7_partA_cni_performance/Part_B/Master/data/flannel_20260418_191631_node_top.txt",
+    "pod_top_file": "/home/iiitd/FILE/7_partA_cni_performance/Part_B/Master/data/flannel_20260418_191631_pod_top.txt"
+  }
+}

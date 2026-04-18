@@ -1,0 +1,48 @@
+# AI Declaration: This script skeleton was generated with AI assistance and must be reviewed by the team.
+
+=================================================================
+  CNI PLUGIN PERFORMANCE COMPARISON REPORT
+  Generated: 2026-04-18 19:30:50
+=================================================================
+
+Metric                                  Flannel       Calico       Cilium
+------------------------------------------------------------------------------
+Avg Latency (ms)                           2.43         1.51         2.36
+P50 Latency (ms)                           2.40         1.49         2.34
+P75 Latency (ms)                           2.55         1.59         2.45
+P90 Latency (ms)                           2.72         1.68         2.57
+P95 Latency (ms)                           2.80         1.75         2.65
+P99 Latency (ms)                           2.95         1.96         2.77
+Min Latency (ms)                           1.98         1.23         1.99
+Max Latency (ms)                           3.08         2.18         2.88
+Est. Throughput RPS                      411.28       660.81       424.42
+Node CPU Avg (m)                            N/A          N/A          N/A
+Node CPU Max (m)                            N/A          N/A          N/A
+Node Mem Avg (Mi)                           N/A          N/A          N/A
+Pod CPU Total (m)                           N/A          N/A          N/A
+Pod Mem Total (Mi)                          N/A          N/A          N/A
+Total Requests                              500          500          500
+Errors                                        0            0            0
+------------------------------------------------------------------------------
+
+WINNER ANALYSIS:
+
+  Lowest Avg Latency : CALICO (1.51 ms)
+  Highest Throughput : CALICO (660.81 RPS)
+  Best P95 Latency   : CALICO (1.75 ms)
+  Lowest Node CPU Avg: N/A (metrics-server data missing in benchmark artifacts)
+
+METRICS AVAILABILITY:
+  FLANNEL: metrics-server not available during run
+  CALICO: metrics-server not available during run
+  CILIUM: metrics-server not available during run
+
+=================================================================
+  EXPLANATION OF METRICS:
+  - Avg Latency: Mean end-to-end response time (A→B→C→A)
+  - P50/P95/P99: Percentile latencies (tail latency matters!)
+  - Throughput: Estimated sequential requests per second
+  - Node CPU Avg/Max: Cluster-level CPU overhead while benchmark traffic runs
+  - Pod CPU/Mem Total: Resource usage of benchmark application pods
+  - Errors: Failed requests (network drops / timeouts)
+=================================================================

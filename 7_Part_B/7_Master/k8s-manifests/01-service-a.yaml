@@ -1,0 +1,84 @@
+# AI Declaration: This script skeleton was generated with AI assistance and must be reviewed by the team.
+
+###############################################################################
+# Service A - Frontend Deployment & Service
+# Pinned to Worker-1 via nodeSelector
+# Replace cniproject with your DockerHub username
+###############################################################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-a
+  namespace: cni-benchmark
+  labels:
+    app: service-a
+    tier: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-a
+  template:
+    metadata:
+      labels:
+        app: service-a
+        tier: frontend
+    spec:
+      # Pin Service A to Worker-1
+      nodeSelector:
+        service-placement: service-a
+      containers:
+        - name: service-a
+          image: cniproject/service-a:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+          env:
+            - name: SERVICE_B_URL
+              value: "http://service-b.cni-benchmark.svc.cluster.local:5001"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-a
+  namespace: cni-benchmark
+  labels:
+    app: service-a
+spec:
+  type: NodePort
+  selector:
+    app: service-a
+  ports:
+    - name: http
+      protocol: TCP
+      port: 5000
+      targetPort: 5000
+      nodePort: 30080   # Access via http://<ANY_NODE_IP>:30080
